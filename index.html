@@ -377,11 +377,11 @@ const CONFIG = {
   catalog: [
     { group: 'Weight loss', items: [
       { name: 'Compounded Tirzepatide/Glycine/B12', form: 'Injectable', tag: FRIDGE, pharmacy: 'Strive Pharmacy',
-        programs: ['1mL-10mg', '2mL-20mg', '4mL-40mg', '6mL-60mg', '12mL-120mg'] },
+        programs: ['1mL-10mg', '2mL-20mg', '4mL-40mg', '6mL-60mg', '8mL-80mg', '9mL-90mg', '12mL-120mg', '16mL-160mg'] },
       { name: 'Compounded Semaglutide/Glycine/B12', form: 'Injectable', pharmacy: 'Strive Pharmacy',
-        programs: ['0.5mL-2.5mg', '1mL-5mg', '3mL-15mg', '4mL-20mg'] },
+        programs: ['0.5mL-2.5mg', '1mL-5mg', '2mL-10mg', '3mL-15mg', '4mL-20mg'] },
       { name: 'Compounded Tirzepatide Flex-Dose', form: 'Injectable', pharmacy: 'Hallandale Pharmacy',
-        programs: ['1mL-10mg', '3mL-30mg', '4mL-40mg', '5mL-50mg', '6mL-60mg', '10mL-100mg', '4mL-60mg (15mg/mL)'] },
+        programs: ['1mL-10mg', '2mL-20mg', '3mL-30mg', '4mL-40mg', '5mL-50mg', '6mL-60mg', '10mL-100mg', '4mL-60mg (15mg/mL)'] },
       { name: 'Compounded Semaglutide Flex-Dose', form: 'Injectable', pharmacy: 'Hallandale Pharmacy',
         programs: ['1mL-2.5mg', '2mL-5mg', '3mL-7.5mg', '3mL-15mg (5mg/mL)', '5mL-12.5mg', '10mL-25mg'] },
       { name: 'Compounded Tirzepatide ODT', form: 'Tablets', pharmacy: 'Vios Compounding Pharmacy',
@@ -452,6 +452,14 @@ const CONFIG = {
   },
   confidentiality: 'The information contained in this e-mail and any attachments may be legally privileged and confidential. If you are not an intended recipient, you are hereby notified that any dissemination, distribution, or copying of this e-mail is strictly prohibited. If you have received this e-mail in error, please notify the sender and permanently delete the e-mail and any attachments immediately. You should not retain, copy or use this e-mail or any attachment for any purpose, nor disclose all or any part of the contents to any other person.'
 };
+// Prices for the four medication families provided by the clinic.
+const PROGRAM_PRICES = {
+  'Compounded Tirzepatide/Glycine/B12': { '1mL-10mg': 179, '2mL-20mg': 349, '4mL-40mg': 599, '6mL-60mg': 799, '8mL-80mg': 949, '9mL-90mg': 1249, '12mL-120mg': 1399, '16mL-160mg': 1799 },
+  'Compounded Tirzepatide Flex-Dose': { '1mL-10mg': 179, '2mL-20mg': 349, '3mL-30mg': 499, '4mL-40mg': 599, '5mL-50mg': 699, '6mL-60mg': 799, '10mL-100mg': 1299 },
+  'Compounded Semaglutide/Glycine/B12': { '1mL-5mg': 249, '2mL-10mg': 449, '3mL-15mg': 699, '4mL-20mg': 749 },
+  'Compounded Semaglutide Flex-Dose': { '1mL-2.5mg': 129, '2mL-5mg': 189, '3mL-7.5mg': 349, '5mL-12.5mg': 549, '3mL-15mg (5mg/mL)': 649, '10mL-25mg': 999 }
+};
+
 // Flatten the catalog: one entry per product, programs normalized to {label, pharmacy}
 const PRODUCTS = CONFIG.catalog.flatMap(g => g.items.map(p => ({
   ...p,
@@ -742,6 +750,7 @@ document.addEventListener('keydown', e => {
 
 // Product changed: rebuild its Program list and auto-fill Form
 function syncProduct(node) {
+  clearAutoProgramPrice(node);
   const p = PRODUCTS[$('[data-f=med]', node).value];
   const prog = $('[data-f=program]', node);
   if (p) {
@@ -761,6 +770,22 @@ function syncProduct(node) {
   $('.directions-field', node).hidden = !wellness;
   if (wellness) ['freq', 'admin'].forEach(k => { $(`[data-f=${k}]`, node).value = ''; });
   else $('[data-f=directions]', node).value = '';
+}
+
+// Keep manual overrides when a price is unavailable; clear only our own autofill.
+function clearAutoProgramPrice(node) {
+  const total = $('[data-f=total]', node);
+  if (node.dataset.autoProgramPrice && total.value === node.dataset.autoProgramPrice) total.value = '';
+  delete node.dataset.autoProgramPrice;
+}
+function syncProgramPrice(node) {
+  const product = PRODUCTS[$('[data-f=med]', node).value];
+  const program = $('[data-f=program]', node).value;
+  const price = product && (PROGRAM_PRICES[product.name] || {})[program];
+  if (price == null) { clearAutoProgramPrice(node); return; }
+  const value = Number(price).toFixed(2);
+  $('[data-f=total]', node).value = value;
+  node.dataset.autoProgramPrice = value;
 }
 
 function renumber() {
@@ -1541,6 +1566,7 @@ $('#items').addEventListener('click', e => {
   const item = btn.closest('.item');
   if (btn.dataset.act === 'dup') {
     const copy = addItem(readItem(item));
+    if (item.dataset.autoProgramPrice && $('[data-f=total]', item).value === item.dataset.autoProgramPrice) copy.dataset.autoProgramPrice = item.dataset.autoProgramPrice;
     item.after(copy);
   } else if (btn.dataset.act === 'del') {
     const only = $$('#items .item').length === 1;
@@ -1561,6 +1587,7 @@ formCol.addEventListener('input', e => {
 formCol.addEventListener('change', e => {
   const node = e.target.closest('.item');
   if (e.target.dataset.f === 'med') syncProduct(node);
+  if (e.target.dataset.f === 'program') syncProgramPrice(node);
   if (e.target.dataset.f === 'type') syncType(node);
   if (e.target.dataset.k === 'payMethod') syncPayMethod();
   const multi = e.target.closest('.multi');
